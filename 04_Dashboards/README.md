@@ -1,0 +1,1 @@
+This folder contains Power BI, Tableau, and other data visualization dashboards for environmental analysis projects.
