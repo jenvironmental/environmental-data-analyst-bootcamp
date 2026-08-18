@@ -56,4 +56,75 @@ FROM pfas_results
 WHERE activity_type = 'Sample-Routine'
 GROUP BY reporting_limit, reporting_limit_unit
 ORDER BY reporting_limit;
+-- 9. Compare reporting limits between routine samples and field blanks
+SELECT
+    pfas_compound,
+    MAX(CASE
+        WHEN activity_type = 'Sample-Routine'
+        THEN reporting_limit
+    END) AS routine_reporting_limit,
+    MAX(CASE
+        WHEN activity_type = 'Quality Control Sample-Field Blank'
+        THEN reporting_limit
+    END) AS field_blank_reporting_limit
+FROM pfas_results
+GROUP BY pfas_compound
+ORDER BY routine_reporting_limit DESC, pfas_compound;
+-- 10. Calculate the difference between routine and field blank reporting limits
+SELECT
+    pfas_compound,
+    MAX(CASE
+        WHEN activity_type = 'Sample-Routine'
+        THEN reporting_limit
+    END) AS routine_reporting_limit,
+    MAX(CASE
+        WHEN activity_type = 'Quality Control Sample-Field Blank'
+        THEN reporting_limit
+    END) AS field_blank_reporting_limit,
+    ROUND((
+        MAX(CASE
+            WHEN activity_type = 'Quality Control Sample-Field Blank'
+            THEN reporting_limit
+        END)
+        -
+        MAX(CASE
+            WHEN activity_type = 'Sample-Routine'
+            THEN reporting_limit
+        END)
+    )::numeric, 2) AS reporting_limit_difference
+FROM pfas_results
+GROUP BY pfas_compound
+ORDER BY reporting_limit_difference DESC, pfas_compound;
+-- 11. Summarize differences between routine and field blank reporting limits
+WITH reporting_limit_comparison AS (
+    SELECT
+        pfas_compound,
+        MAX(CASE
+            WHEN activity_type = 'Sample-Routine'
+            THEN reporting_limit
+        END) AS routine_reporting_limit,
+        MAX(CASE
+            WHEN activity_type = 'Quality Control Sample-Field Blank'
+            THEN reporting_limit
+        END) AS field_blank_reporting_limit
+    FROM pfas_results
+    GROUP BY pfas_compound
+)
 
+SELECT
+    COUNT(*) AS compounds_compared,
+    COUNT(*) FILTER (
+        WHERE field_blank_reporting_limit > routine_reporting_limit
+    ) AS higher_field_blank_limits,
+    ROUND(AVG(
+        field_blank_reporting_limit - routine_reporting_limit
+    )::numeric, 2) AS average_difference
+FROM reporting_limit_comparison;
+-- 12. Verify detection status in field blank QA/QC samples
+SELECT
+    detection_condition,
+    COUNT(*) AS result_count
+FROM pfas_results
+WHERE activity_type = 'Quality Control Sample-Field Blank'
+GROUP BY detection_condition
+ORDER BY result_count DESC;
